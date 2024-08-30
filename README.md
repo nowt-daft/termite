@@ -1,0 +1,2 @@
+# termite
+🐜 Easy terminal apps
