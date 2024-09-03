@@ -1,6 +1,6 @@
 import { log, info, warn, error, debug } from 'console';
 
-type Command = (...args: string[]) => void;
+type Command = (...args: string[]) => Promise<void> | void;
 type Commands = Record<string,Command>;
 
 export class Terminal {
@@ -22,11 +22,23 @@ export class Terminal {
 	}
 
 	static run(cmd: string, ...args: string[]): string {
-		return Bun.spawnSync({
-			cmd: [cmd, ...args]
-		})
+		return Bun.spawnSync(
+			[cmd, ...args]
+		)
 		.stdout
 		.toString()
+	}
+
+	static async spawn(cmd: string, ...args: string[]) {
+		const process = Bun.spawn({
+			cmd: [cmd, ...args]
+		});
+		/** @ts-expect-error */
+		for await (const chunk of process.stdout)
+			Bun.stdout.writer().write(chunk);
+			//console.log(new TextDecoder().decode(chunk));
+		// TODO: Resolve a promise when process has exited.
+		return process;
 	}
 }
 
@@ -115,17 +127,17 @@ export default class App {
 				commands;
 	}
 
-	main(cmd: string, ...args: string[]) {
+	async main(cmd: string, ...args: string[]) {
 		if (this.#commands[App.COMMAND])
-			return this.pass(App.COMMAND, cmd, ...args);
+			return await this.pass(App.COMMAND, cmd, ...args);
 
 		if (!cmd)
-			return this.pass(App.DEFAULT);
+			return await this.pass(App.DEFAULT);
 	
 		if (this.#commands[cmd]) {
-			this.pass(App.START, cmd, ...args);
-			this.pass(cmd, ...args);
-			this.pass(App.END, cmd, ...args);
+			await this.pass(App.START, cmd, ...args);
+			await this.pass(cmd, ...args);
+			await this.pass(App.END, cmd, ...args);
 
 			return;
 		}
@@ -134,8 +146,8 @@ export default class App {
 		this.exit(1);
 	}
 
-	pass(cmd: string, ...args: string[]) {
-		this.#commands[cmd]?.call(this, ...args);
+	async pass(cmd: string, ...args: string[]) {
+		await this.#commands[cmd]?.call(this, ...args);
 	}
 
 	exit(code = 0) {
@@ -143,8 +155,8 @@ export default class App {
 		process.exit(code);
 	}
 
-	run() {
+	async run() {
 		const [cmd, ...args] = process.argv.slice(2);
-		this.main(cmd, ...args);
+		await this.main(cmd, ...args);
 	}
 }
