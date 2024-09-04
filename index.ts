@@ -33,11 +33,15 @@ export class Terminal {
 		const process = Bun.spawn({
 			cmd: [cmd, ...args]
 		});
+		const printer = new Print;
+		printer.header(`SHELL :: ${ [cmd, ...args].join(" ") }`);
 		/** @ts-expect-error */
 		for await (const chunk of process.stdout)
-			Bun.stdout.writer().write(chunk);
-			//console.log(new TextDecoder().decode(chunk));
-		// TODO: Resolve a promise when process has exited.
+			Bun.write(Bun.stdout, new TextDecoder().decode(chunk).trim());
+		printer.ln("");
+		printer.done(`EXITING SUBSHELL...`);
+		printer.hr();
+
 		return process;
 	}
 }
@@ -45,6 +49,11 @@ export class Terminal {
 export class Print extends Terminal {
 	constructor() {
 		super();
+	}
+
+	write(msg = ""): Print {
+		Bun.write(Bun.stdout, msg);
+		return this;
 	}
 
 	ln(...msgs: string[]): Print {
@@ -82,14 +91,18 @@ export class Print extends Terminal {
 		return this.ln(`✔ DONE ${msg}`);
 	}
 
-	hr(char = '•', size = this.width): Print {
-		return this.ln(char.repeat(size));
+	hr(size = this.width): Print {
+		return this.ln("╌".repeat(size));
 	}
 
-	header(title: string, char = '•', size = this.width): Print {
-		this.hr(char, size);
-		this.ln(`${ char } ${ title }`);
-		this.hr(char, size);
+	header(title: string, size = this.width): Print {
+		this.ln("╔" + "═".repeat(size - 2) + "╗");
+		this.ln(`║ ${
+			title.length > size ?
+				title.slice(0, size - 7 - title.length) + '...' :
+				title + " ".repeat(size - 4 - title.length)
+		} ║`);
+		this.ln("╚" + "═".repeat(size - 2) + "╝");
 		return this;
 	}
 
